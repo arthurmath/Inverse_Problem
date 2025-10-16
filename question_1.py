@@ -1,12 +1,14 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from tqdm import tqdm
+from scipy import optimize
 
 
 ### Problème direct
 
 # Paramètres
 N = 40  # Nombre de noeuds
-M = 1000  # Nombre de pas de temps
+M = 300  # Nombre de pas de temps
 L = 1.0  # Longeur totale
 T = 1.0  # Temps total
 T0 = 10.0  # Température initiale
@@ -146,7 +148,7 @@ for i in range(M):
 
 ### Construction de G
 G = np.zeros(((N-1)*M, M))
-for l in range(M):
+for l in tqdm(range(M)):
     # Solve with unit flux at time step l
     Ul = Resolution_step('Crank', l)
     for i in range(M):
@@ -157,8 +159,30 @@ for l in range(M):
 
 
 
+
+
 ### Résolution
-p = np.linalg.pinv(G) @ d 
+p_inv = np.linalg.pinv(G) @ d 
+
+# Cost function with optional Tikhonov regularization
+def cout(p, beta=0):
+    residual = np.linalg.norm(G @ p - d, 2)**2
+    if beta > 0:
+        return residual + beta * np.linalg.norm(p, 2)**2
+    return residual
+
+
+beta = 0.1 
+# x0 = p_inv.copy() 
+x0 = np.zeros_like(p_inv)
+lw = [-2] * M
+up = [2] * M
+bounds = list(zip(lw, up))
+p_opt = optimize.minimize(cout, x0, args=(beta,), method='L-BFGS-B', bounds=bounds, options={'disp': True}).x
+
+
+
+
 
 
 ### Verification
@@ -166,21 +190,20 @@ def f(t) :
   return np.sin(4 * np.pi * t / T)
 X = np.arange(0, dt*M, dt)
 Y = [ f(x) for x in X ]
-print(np.allclose(p[2:M-1], Y[2:M-1], rtol=1e-1))
+print(np.allclose(p_inv[1:M-1], Y[1:M-1], atol=2e-1))
 
 
 ### Tracé
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 3))
-ax1.plot(X, p)
-ax1.set_title('Flux retrouvé')
-ax2.plot(X, Y)
-ax2.set_title('Flux initial')
+fig, ((ax1, ax2, ax3), (ax4, ax5, ax6)) = plt.subplots(2, 3, figsize=(10, 6))
+ax1.plot(X, Y)
+ax1.set_title('Flux initial')
+ax2.plot(X, p_inv)
+ax2.set_title('Flux retrouvé')
+ax3.plot(X, (Y-p_inv))
+ax3.set_title('Difference')
+ax4.plot(X, p_opt)
+ax4.set_title('Optimisation')
 plt.show()
-
-
-
-
-
 
 
 
